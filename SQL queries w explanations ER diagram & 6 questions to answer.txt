@@ -1,0 +1,115 @@
+-- **Creating Normalized Tables**
+-- The following SQL scripts create a normalized database schema for a retail system. 
+-- This includes tables for customers, products, invoices, and invoice details.
+
+-- Customers Table: Stores customer information, including their unique ID and country.
+CREATE TABLE Customers (
+    CustomerID INT PRIMARY KEY,       -- Unique identifier for each customer
+    Country VARCHAR(50)              -- Country of the customer
+);
+
+-- Products Table: Contains details about products, including stock codes, descriptions, and prices.
+CREATE TABLE Products (
+    StockCode VARCHAR(20) PRIMARY KEY, -- Unique product code
+    Description TEXT,                  -- Description of the product
+    UnitPrice DECIMAL(10, 2)           -- Price per unit of the product
+);
+
+-- Invoices Table: Records invoice details, including invoice numbers, dates, and associated customers.
+CREATE TABLE Invoices (
+    InvoiceNo VARCHAR(20) PRIMARY KEY, -- Unique invoice number
+    InvoiceDate DATETIME,              -- Date of the invoice
+    CustomerID INT,                    -- Associated customer (foreign key)
+    FOREIGN KEY (CustomerID) REFERENCES Customers(CustomerID)
+);
+
+-- InvoiceDetails Table: Tracks the items and quantities purchased in each invoice.
+CREATE TABLE InvoiceDetails (
+    InvoiceNo VARCHAR(20),             -- Invoice number (foreign key)
+    StockCode VARCHAR(20),             -- Product code (foreign key)
+    Quantity INT,                      -- Quantity of the product purchased
+    PRIMARY KEY (InvoiceNo, StockCode),
+    FOREIGN KEY (InvoiceNo) REFERENCES Invoices(InvoiceNo),
+    FOREIGN KEY (StockCode) REFERENCES Products(StockCode)
+);
+
+-- **Queries to Analyze Data**
+
+-- Q1: Identify the customers who have spent the most money.
+-- This query calculates the total amount spent by each customer based on product prices and purchased quantities.
+SELECT 
+    c.CustomerID, 
+    SUM(p.UnitPrice * id.Quantity) AS money_spent 
+FROM Customers AS c
+LEFT JOIN Invoices AS i ON c.CustomerID = i.CustomerID
+LEFT JOIN InvoiceDetails AS id ON i.InvoiceNo = id.InvoiceNo
+LEFT JOIN Products AS p ON id.StockCode = p.StockCode
+GROUP BY c.CustomerID
+ORDER BY money_spent DESC;
+
+-- Q2: Identify the customers who have made the most transactions.
+-- This query counts the number of invoices associated with each customer.
+SELECT 
+    c.CustomerID, 
+    COUNT(*) AS transaction_count
+FROM Customers AS c
+LEFT JOIN Invoices AS i ON c.CustomerID = i.CustomerID
+GROUP BY c.CustomerID
+ORDER BY transaction_count DESC;
+
+-- Q3: Find the most trending products based on purchased quantity.
+-- This query calculates how many times each product was purchased.
+SELECT 
+    p.Description, 
+    COUNT(id.InvoiceNo) AS purchase_count
+FROM Products AS p
+LEFT JOIN InvoiceDetails AS id ON p.StockCode = id.StockCode
+GROUP BY p.Description
+ORDER BY purchase_count DESC;
+
+-- Q4: Identify the countries that purchased the most products.
+-- This query counts the number of invoices associated with customers from each country.
+SELECT 
+    c.Country, 
+    COUNT(id.InvoiceNo) AS total_purchases
+FROM Customers AS c
+LEFT JOIN Invoices AS i ON c.CustomerID = i.CustomerID
+LEFT JOIN InvoiceDetails AS id ON i.InvoiceNo = id.InvoiceNo
+GROUP BY c.Country
+ORDER BY total_purchases DESC;
+
+-- Q5: Analyze spending by country with categorized spending levels.
+-- This query calculates the total spending per country and categorizes it into 'Low', 'Medium', or 'High' based on thresholds.
+SELECT  
+    c.Country,
+    SUM(id.Quantity * p.UnitPrice) AS TotalSpending,
+    CASE 
+        WHEN SUM(id.Quantity * p.UnitPrice) < 100 THEN 'Low'
+        WHEN SUM(id.Quantity * p.UnitPrice) BETWEEN 100 AND 500 THEN 'Medium'
+        ELSE 'High'
+    END AS SpendingCategory
+FROM 
+    Customers AS c
+JOIN 
+    Invoices AS i ON c.CustomerID = i.CustomerID
+JOIN 
+    InvoiceDetails AS id ON i.InvoiceNo = id.InvoiceNo
+JOIN Products AS p ON id.StockCode = p.StockCode 
+GROUP BY 
+    SpendingCategory, c.Country
+ORDER BY 
+    TotalSpending DESC;
+
+-- Q6: Analyze quarterly trends of product purchases.
+-- This query calculates the total quantity of each product purchased in each quarter, 
+-- along with the quarter represented in 'YYYY-QX' format.
+SELECT
+    p.Description,                                -- Product description
+    CONCAT(YEAR(i.InvoiceDate), '-Q', QUARTER(i.InvoiceDate)) AS Quarter, -- Quarter format (e.g., 2023-Q1)
+    SUM(id.Quantity) AS TotalQuantity            -- Total quantity purchased in the quarter
+FROM Customers AS c
+LEFT JOIN Invoices AS i ON c.CustomerID = i.CustomerID
+LEFT JOIN InvoiceDetails AS id ON i.InvoiceNo = id.InvoiceNo
+LEFT JOIN Products AS p ON id.StockCode = p.StockCode
+GROUP BY p.Description, Quarter
+ORDER BY TotalQuantity DESC;
